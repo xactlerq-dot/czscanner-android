@@ -73,15 +73,17 @@ jobs:
             ~/.buildozer/android/packages
           key: p4a-cache-${{ hashFiles('**/buildozer.spec') }}
 
-      - name: Download patched p4a as ZIP (main branch)
+      - name: Clone p4a with git (depth 1, fallback)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~/.buildozer/android/platform
-          wget https://github.com/Android-for-Python/python-for-android/archive/refs/heads/main.zip -O p4a-main.zip
-          unzip p4a-main.zip
-          mv python-for-android-main python-for-android
-          rm p4a-main.zip
-          echo "✅ Python-for-Android (main) успешно загружен и установлен"
+          git config --global http.postBuffer 524288000
+          git config --global http.lowSpeedLimit 1000
+          git config --global http.lowSpeedTime 60
+          git clone --depth 1 --branch main https://github.com/Android-for-Python/python-for-android.git python-for-android || \
+          git clone --depth 1 --branch master https://github.com/Android-for-Python/python-for-android.git python-for-android || \
+          { echo "❌ Не удалось клонировать p4a"; exit 1; }
+          echo "✅ Python-for-Android успешно клонирован"
 
       - name: Build APK with retry
         run: |
@@ -94,7 +96,6 @@ jobs:
           echo "🔍 PATH: $PATH"
           which buildozer || { echo "❌ buildozer не найден"; exit 1; }
 
-          # 🔁 Повторяем до 3 раз
           for i in {1..3}; do
             echo "🔄 Попытка сборки №$i"
             if buildozer -v android debug; then
@@ -107,12 +108,11 @@ jobs:
             fi
           done
 
-          # Проверка результата
           if [ ! -f bin/*.apk ]; then
-            echo "❌ Сборка не удалась: APK не найден"
+            echo "❌ APK не найден"
             exit 1
           fi
-          echo "🎉 APK успешно создан: $(ls bin/*.apk)"
+          echo "🎉 APK: $(ls bin/*.apk)"
 
         env:
           ANDROIDSDK: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
