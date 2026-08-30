@@ -73,58 +73,39 @@ jobs:
             ~/.buildozer/android/packages
           key: p4a-cache-${{ hashFiles('**/buildozer.spec') }}
 
-      - name: Download p4a via tar.gz (reliable fallback)
-        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Build APK with retries and retries
         run: |
-          cd ~/.buildozer/android/platform
-
-          echo "🔧 Пытаемся скачать с ветки main..."
-          if wget -q --show-progress https://github.com/Android-for-Python/python-for-android/tarball/main -O p4a-main.tar.gz; then
-            tar -xzf p4a-main.tar.gz
-            rm p4a-main.tar.gz
-            mv Android-for-Python-python-for-android-* python-for-android
-            echo "✅ Успешно загружен p4a (main)"
-          else
-            echo "⚠️ Ветка main не найдена, пробуем master..."
-            if wget -q --show-progress https://github.com/Android-for-Python/python-for-android/tarball/master -O p4a-master.tar.gz; then
-              tar -xzf p4a-master.tar.gz
-              rm p4a-master.tar.gz
-              mv Android-for-Python-python-for-android-* python-for-android
-              echo "✅ Успешно загружен p4a (master)"
-            else
-              echo "❌ Не удалось скачать ни с main, ни с master"
-              exit 1
-            fi
-          fi
-
-      - name: Build APK with retry
-        run: |
-          export PATH="$HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:$HOME/.buildozer/android/platform/android-sdk/platform-tools:/opt/hostedtoolcache/Python/3.9.25/x64/bin:$PATH"
           export ANDROIDSDK="$HOME/.buildozer/android/platform/android-sdk"
           export ANDROIDNDK="$HOME/.buildozer/android/platform/android-ndk-r28c"
           export ANDROIDAPI="30"
           export ANDROIDMINAPI="21"
+          export PATH="$ANDROIDSDK/cmdline-tools/latest/bin:$ANDROIDSDK/platform-tools:/opt/hostedtoolcache/Python/3.9.25/x64/bin:$PATH"
 
           echo "🔍 PATH: $PATH"
           which buildozer || { echo "❌ buildozer не найден"; exit 1; }
 
+          # Повторяем сборку до 3 раз
           for i in {1..3}; do
             echo "🔄 Попытка сборки №$i"
-            if buildozer -v android debug; then
+            if buildozer -v android debug 2>&1 | tee build.log; then
               echo "✅ Сборка успешна"
               break
             else
-              sleep_seconds=$((i * 30))
-              echo "❌ Ошибка, ждём $sleep_seconds секунд..."
+              # Покажем последние строки лога
+              echo "❌ Ошибка. Последние строки лога:"
+              tail -n 20 build.log
+              sleep_seconds=$((i * 60))
+              echo "⏳ Ждём $sleep_seconds секунд перед повтором..."
               sleep $sleep_seconds
             fi
           done
 
+          # Проверим, есть ли APK
           if [ ! -f bin/*.apk ]; then
-            echo "❌ APK не найден"
+            echo "❌ Сборка не удалась: APK не найден"
             exit 1
           fi
-          echo "🎉 APK: $(ls bin/*.apk)"
+          echo "🎉 APK успешно создан: $(ls bin/*.apk)"
 
         env:
           ANDROIDSDK: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
