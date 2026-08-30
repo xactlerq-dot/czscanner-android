@@ -9,6 +9,7 @@ requirements = python==3.9,kivy==2.1.0,kivymd,pyzbar,Pillow,qrcode
 orientation = portrait
 android.permissions = CAMERA,WRITE_EXTERNAL_STORAGE
 fullscreen = 0
+p4a.local_recipes = ./local-recipes
 
 [buildozer]
 log_level = 2
