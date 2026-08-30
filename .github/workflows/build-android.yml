@@ -13,21 +13,23 @@ jobs:
         with:
           python-version: 3.9
 
-      - name: Install dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git zip unzip openjdk-8-jdk-headless libffi-dev libssl-dev
+
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install cython
           pip install buildozer
-          pip install Cython
 
-      - name: Build APK with Buildozer
+      - name: Install Buildozer Android Docker image
         run: |
-          buildozer -v android debug
-        env:
-          PYTHONPATH: ${{ github.workspace }}
+          docker run --rm -v "${PWD}":/home/user/hostcwd -w /home/user/hostcwd kivy/buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           path: bin/*.apk
           if-no-files-found: error
-          retention-days: 7
