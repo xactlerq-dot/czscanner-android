@@ -65,40 +65,41 @@ jobs:
           yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.buildozer/android/platform/android-sdk --licenses
           echo "✅ SDK и лицензии установлены"
 
-      - name: Cache p4a and Python packages
+      - name: Cache p4a and pip
         uses: actions/cache@v4
         with:
           path: |
             ~/.buildozer/android/platform/python-for-android
             ~/.buildozer/android/packages
             ~/.cache/pip
-          key: p4a-pip-cache-${{ hashFiles('**/buildozer.spec') }}
+          key: full-build-cache-${{ hashFiles('**/buildozer.spec') }}
 
-      - name: Build APK with smart retries
+      - name: Build APK with robust retry
         run: |
           export ANDROIDSDK="$HOME/.buildozer/android/platform/android-sdk"
           export ANDROIDNDK="$HOME/.buildozer/android/platform/android-ndk-r28c"
           export ANDROIDAPI="30"
           export ANDROIDMINAPI="21"
-          export PATH="$ANDROIDSDK/cmdline-tools/latest/bin:$ANDROIDSDK/platform-tools:/opt/hostedtoolcache/Python/3.9.25/x64/bin:$PATH"
+          export PATH="$ANDROIDSDK/cmdline-tools/latest/bin:$ANDROIDSDK/platform-tools:$PATH"
 
           echo "🔍 PATH: $PATH"
           which buildozer || { echo "❌ buildozer не найден"; exit 1; }
 
-          # Повторяем до 3 раз, с экспоненциальной задержкой
+          # Удаляем старые логи
+          rm -f build.log
+
+          # Повторяем до 3 раз
           for i in {1..3}; do
             echo "🔄 Попытка сборки №$i"
-            rm -f build.log
-
             if buildozer -v android debug 2>&1 | tee build.log; then
               echo "✅ Сборка завершена успешно"
               break
             else
               echo "❌ Ошибка в попытке №$i"
-              tail -n 30 build.log | grep -i "error\|fail\|502\|timeout"
+              tail -n 30 build.log | grep -i "error\|fail\|502\|timeout\|download"
 
               if [ $i -lt 3 ]; then
-                sleep_seconds=$((i * 90))
+                sleep_seconds=$((i * 120))
                 echo "⏳ Ждём $sleep_seconds секунд перед повтором..."
                 sleep $sleep_seconds
               fi
