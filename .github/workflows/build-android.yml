@@ -30,12 +30,12 @@ jobs:
           pip install --upgrade pip
           pip install --upgrade cython
           pip install buildozer
-          which buildozer
           buildozer --version
 
       - name: Create .buildozer directories
         run: |
           mkdir -p ~/.buildozer/android/platform
+          mkdir -p ~/.buildozer/android/packages
 
       - name: Cache Android SDK
         uses: actions/cache@v4
@@ -47,8 +47,8 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~/.buildozer/android/platform
-          wget https://dl.google.com/android/repository/commandlinetools-linux-6858069_latest.zip
-          unzip commandlinetools-linux-6858069_latest.zip -d android-sdk
+          wget -q --show-progress https://dl.google.com/android/repository/commandlinetools-linux-6858069_latest.zip
+          unzip -q commandlinetools-linux-6858069_latest.zip -d android-sdk
           rm commandlinetools-linux-6858069_latest.zip
 
           mkdir -p android-sdk/cmdline-tools/latest
@@ -65,15 +65,16 @@ jobs:
           yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.buildozer/android/platform/android-sdk --licenses
           echo "✅ SDK и лицензии установлены"
 
-      - name: Cache p4a and packages
+      - name: Cache p4a and Python packages
         uses: actions/cache@v4
         with:
           path: |
             ~/.buildozer/android/platform/python-for-android
             ~/.buildozer/android/packages
-          key: p4a-cache-${{ hashFiles('**/buildozer.spec') }}
+            ~/.cache/pip
+          key: p4a-pip-cache-${{ hashFiles('**/buildozer.spec') }}
 
-      - name: Build APK with retries and retries
+      - name: Build APK with smart retries
         run: |
           export ANDROIDSDK="$HOME/.buildozer/android/platform/android-sdk"
           export ANDROIDNDK="$HOME/.buildozer/android/platform/android-ndk-r28c"
@@ -84,35 +85,42 @@ jobs:
           echo "🔍 PATH: $PATH"
           which buildozer || { echo "❌ buildozer не найден"; exit 1; }
 
-          # Повторяем сборку до 3 раз
+          # Повторяем до 3 раз, с экспоненциальной задержкой
           for i in {1..3}; do
             echo "🔄 Попытка сборки №$i"
+            rm -f build.log
+
             if buildozer -v android debug 2>&1 | tee build.log; then
-              echo "✅ Сборка успешна"
+              echo "✅ Сборка завершена успешно"
               break
             else
-              # Покажем последние строки лога
-              echo "❌ Ошибка. Последние строки лога:"
-              tail -n 20 build.log
-              sleep_seconds=$((i * 60))
-              echo "⏳ Ждём $sleep_seconds секунд перед повтором..."
-              sleep $sleep_seconds
+              echo "❌ Ошибка в попытке №$i"
+              tail -n 30 build.log | grep -i "error\|fail\|502\|timeout"
+
+              if [ $i -lt 3 ]; then
+                sleep_seconds=$((i * 90))
+                echo "⏳ Ждём $sleep_seconds секунд перед повтором..."
+                sleep $sleep_seconds
+              fi
             fi
           done
 
-          # Проверим, есть ли APK
+          # Проверяем, есть ли APK
           if [ ! -f bin/*.apk ]; then
             echo "❌ Сборка не удалась: APK не найден"
+            echo "📋 Последние строки лога:"
+            tail -n 50 build.log
             exit 1
           fi
+
           echo "🎉 APK успешно создан: $(ls bin/*.apk)"
+          ls -la bin/*.apk
 
         env:
           ANDROIDSDK: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
           ANDROIDNDK: ${{ github.workspace }}/.buildozer/android/platform/android-ndk-r28c
           ANDROIDAPI: 30
           ANDROIDMINAPI: 21
-          PATH: /opt/hostedtoolcache/Python/3.9.25/x64/bin:/opt/hostedtoolcache/Python/3.9.25/x64:/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/8.0.502-7/x64/bin:${{ github.workspace }}/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/.buildozer/android/platform/android-sdk/platform-tools:/usr/bin:$PATH
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
