@@ -30,6 +30,9 @@ jobs:
           pip install --upgrade pip
           pip install --upgrade cython
           pip install buildozer
+          # 🔍 Проверим, где оказался buildozer
+          which buildozer
+          buildozer --version
 
       - name: Download and set up Android SDK
         run: |
@@ -52,22 +55,24 @@ jobs:
           yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.buildozer/android/platform/android-sdk --install "platform-tools" "build-tools;30.0.3" "platforms;android-30"
           yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.buildozer/android/platform/android-sdk --licenses
 
-      - name: Build APK with retry
+      - name: Build APK with retry and full PATH
         run: |
-          echo "PATH:"
+          echo "🔍 PATH:"
           echo $PATH
+          echo "🔍 Where is buildozer?"
+          which buildozer || find /opt/hostedtoolcache/Python -name buildozer -type f -executable 2>/dev/null
+          echo "🔍 Git:"
           which git
-          which sdkmanager
+          echo "🔍 SDK tools:"
+          ls -la ~/.buildozer/android/platform/android-sdk/tools/bin/
 
-          # 🔁 Повторяем сборку до 3 раз при ошибке
-          for i in {1..3}; do
-            echo "Попытка сборки №$i"
-            buildozer -v android debug && break || sleep 30
-          done
-
-          # Проверим, создался ли APK
-          if [ ! -f bin/*.apk ]; then
-            echo "❌ Сборка не удалась после 3 попыток"
+          # ✅ Используем полный путь к buildozer, если нужно
+          PYTHON_PATH="/opt/hostedtoolcache/Python/3.9.25/x64/bin"
+          if [ -f "$PYTHON_PATH/buildozer" ]; then
+            echo "✅ Нашли buildozer, запускаем..."
+            "$PYTHON_PATH/buildozer" -v android debug
+          else
+            echo "❌ buildozer не найден в $PYTHON_PATH"
             exit 1
           fi
         env:
@@ -75,7 +80,7 @@ jobs:
           ANDROIDNDK: ${{ github.workspace }}/.buildozer/android/platform/android-ndk-r28c
           ANDROIDAPI: 30
           ANDROIDMINAPI: 21
-          PATH: ${{ github.workspace }}/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/.buildozer/android/platform/android-sdk/platform-tools:/usr/bin:$PATH
+          PATH: /opt/hostedtoolcache/Python/3.9.25/x64/bin:/opt/hostedtoolcache/Python/3.9.25/x64:/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/8.0.502-7/x64/bin:${{ github.workspace }}/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/.buildozer/android/platform/android-sdk/platform-tools:/usr/bin:$PATH
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
