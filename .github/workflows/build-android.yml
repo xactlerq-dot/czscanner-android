@@ -73,17 +73,29 @@ jobs:
             ~/.buildozer/android/packages
           key: p4a-cache-${{ hashFiles('**/buildozer.spec') }}
 
-      - name: Clone p4a with git (depth 1, fallback)
+      - name: Download p4a via tar.gz (reliable fallback)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~/.buildozer/android/platform
-          git config --global http.postBuffer 524288000
-          git config --global http.lowSpeedLimit 1000
-          git config --global http.lowSpeedTime 60
-          git clone --depth 1 --branch main https://github.com/Android-for-Python/python-for-android.git python-for-android || \
-          git clone --depth 1 --branch master https://github.com/Android-for-Python/python-for-android.git python-for-android || \
-          { echo "❌ Не удалось клонировать p4a"; exit 1; }
-          echo "✅ Python-for-Android успешно клонирован"
+
+          echo "🔧 Пытаемся скачать с ветки main..."
+          if wget -q --show-progress https://github.com/Android-for-Python/python-for-android/tarball/main -O p4a-main.tar.gz; then
+            tar -xzf p4a-main.tar.gz
+            rm p4a-main.tar.gz
+            mv Android-for-Python-python-for-android-* python-for-android
+            echo "✅ Успешно загружен p4a (main)"
+          else
+            echo "⚠️ Ветка main не найдена, пробуем master..."
+            if wget -q --show-progress https://github.com/Android-for-Python/python-for-android/tarball/master -O p4a-master.tar.gz; then
+              tar -xzf p4a-master.tar.gz
+              rm p4a-master.tar.gz
+              mv Android-for-Python-python-for-android-* python-for-android
+              echo "✅ Успешно загружен p4a (master)"
+            else
+              echo "❌ Не удалось скачать ни с main, ни с master"
+              exit 1
+            fi
+          fi
 
       - name: Build APK with retry
         run: |
