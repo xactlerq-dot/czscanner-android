@@ -16,7 +16,7 @@ jobs:
 
       - name: Verify Git installation
         run: |
-          which git || echo "Git is not in PATH!"
+          which git
           git --version
 
       - name: Set up Java 8
@@ -44,28 +44,33 @@ jobs:
           unzip commandlinetools-linux-6858069_latest.zip
           rm commandlinetools-linux-6858069_latest.zip
 
+          # Создаём правильную структуру
           mkdir -p cmdline-tools/latest
           mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
           rm -rf cmdline-tools/latest/cmdline-tools
 
+          # 🔥 Критично: создаём символическую ссылку, чтобы Buildozer нашёл sdkmanager
+          mkdir -p tools/bin
+          ln -s $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager tools/bin/sdkmanager
+
       - name: Accept licenses and install SDK packages
         run: |
-          yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=~/.buildozer/android/platform/android-sdk --install "platform-tools" "build-tools;30.0.3" "platforms;android-30"
-          yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=~/.buildozer/android/platform/android-sdk --licenses
+          yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.buildozer/android/platform/android-sdk --install "platform-tools" "build-tools;30.0.3" "platforms;android-30"
+          yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.buildozer/android/platform/android-sdk --licenses
 
       - name: Build APK
         run: |
-          echo "PATH contains:"
-          echo $PATH
+          echo "Checking sdkmanager in tools/bin:"
+          ls -la ~/.buildozer/android/platform/android-sdk/tools/bin/
           which git
-          git --version
           buildozer -v android debug
         env:
           ANDROIDSDK: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
           ANDROIDNDK: ${{ github.workspace }}/.buildozer/android/platform/android-ndk-r19c
           ANDROIDAPI: 30
           ANDROIDMINAPI: 21
-          PATH: /usr/bin:{{ github.workspace }}/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/.buildozer/android/platform/android-sdk/platform-tools:$PATH
+          # Убедимся, что PATH включает нужные пути
+          PATH: ${{ github.workspace }}/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/.buildozer/android/platform/android-sdk/platform-tools:/usr/bin:$PATH
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
