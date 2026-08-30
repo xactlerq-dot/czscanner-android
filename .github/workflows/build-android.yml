@@ -73,15 +73,15 @@ jobs:
             ~/.buildozer/android/packages
           key: p4a-cache-${{ hashFiles('**/buildozer.spec') }}
 
-      - name: Download patched p4a as ZIP (no git)
+      - name: Download patched p4a as ZIP (main branch)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~/.buildozer/android/platform
-          wget https://github.com/Android-for-Python/python-for-android/archive/refs/heads/master.zip -O p4a-master.zip
-          unzip p4a-master.zip
-          mv python-for-android-master python-for-android
-          rm p4a-master.zip
-          echo "✅ Python-for-Android (patched) загружен и распакован"
+          wget https://github.com/Android-for-Python/python-for-android/archive/refs/heads/main.zip -O p4a-main.zip
+          unzip p4a-main.zip
+          mv python-for-android-main python-for-android
+          rm p4a-main.zip
+          echo "✅ Python-for-Android (main) успешно загружен и установлен"
 
       - name: Build APK with retry
         run: |
@@ -94,7 +94,7 @@ jobs:
           echo "🔍 PATH: $PATH"
           which buildozer || { echo "❌ buildozer не найден"; exit 1; }
 
-          # 🔁 Повторяем до 3 раз с растущей задержкой
+          # 🔁 Повторяем до 3 раз
           for i in {1..3}; do
             echo "🔄 Попытка сборки №$i"
             if buildozer -v android debug; then
